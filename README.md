@@ -60,4 +60,4 @@ make -C <kernel_out> M=$PWD ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-l
 
 ## 许可
 
-GPL-2.0（见 LICENSE-GPL-2.0）。
+GPL-2.0（全文见 LICENSE）。
