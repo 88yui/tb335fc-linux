@@ -75,6 +75,10 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
   已把仓库里的干净版本回写设备，现在两边都是 b08397afbdf5b5c735d8354dd34879f0；
 * 早期试验期的 tb335-rotate-guard.service / tb335-session-heal.service 对应的脚本在现网设备上已不存在，未收录；
 * userspace/cammirror 与 boot/bin/cammirror 是同一文件（32fa089a270446aedccfca047a77912e），保留两份仅为目录完整性。
+* 行尾统一：设备上有 8 个文件原本是 CRLF（kb-move.py、bt-bridge.py、logd-shim.py、wifi-gui.py、kmsg-persist.py、
+  hide-dp/wait-gpu/wifi-dhcp 三个 .service），仓库里统一存成 LF 并把 LF 版本写回设备，所以上面 82/82 的 md5 是
+  「仓库文件 == 设备当前文件」的实测值；仓库另加 .gitattributes（* text=auto eol=lf）防止 Windows 检出把脚本变成 CRLF。
+* kernel/camreg/camreg_isp.c 与原稿的唯一差别是首行加的 SPDX 头（去掉该行后 md5 完全一致）。
 
 ## 6. 已知分支差异
 

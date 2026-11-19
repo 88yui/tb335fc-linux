@@ -132,3 +132,31 @@ WMT 从未启动 ⇒ 无 WiFi 无蓝牙。修复：把 vendor/bin + firmware（8
 并加 /persist/wifi-up.sh。
 
 注意：**不要整表读** /sys/kernel/debug/clk/clk_summary 或 pm_genpd_summary —— 本机曾因此直接重启。
+## 9. GPT 分区布局与「把 Android 分区还给 Linux」
+
+本机存储 119.2 GB，GPT 分区（lsblk PARTLABEL，2026-11-19 实测）：
+
+| 分区 | 大小 | 标签 | 现状 / 用途 |
+| --- | --- | --- | --- |
+| /dev/sdc13 | 64 M | metadata | f2fs，Android 元数据 |
+| /dev/sdc31 | 8 M | init_boot_a | **本项目的 A9b 修复镜像位置**（v4，md5 bc8e7e99…） |
+| /dev/sdc43 | 16 M | logo_a | 开机 logo（121 帧 zlib，见第 6 节） |
+| /dev/sdc52/53/54 | 16/64/64 M | lk_b, boot_b, vendor_boot_b | Android B 槽引导（保持原样） |
+| /dev/sdc61 | 11.5 M | init_boot_b | Android B 槽 init_boot |
+| /dev/sdc62 | 11 G | super | Android system/vendor/product 的动态分区，**Android 能否启动全靠它** |
+| /dev/sdc69 | 60 G | debian_root | Debian 根：/ = 子目录 sdroot，/persist = 该分区根（里面放救援镜像） |
+| /dev/sdc72 | 46.7 G | userdata | Android /data，**目前未挂载，可回收** |
+
+要把 Android 的空间让给 Linux，两种做法：
+
+1. **只回收 userdata（sdc72，46.7 G）** —— 推荐。mkfs 成 ext4 后挂到 /data 或 /home，
+   Android 仍能启动（相当于恢复出厂），随时可以切回去；风险只在丢 Android 用户数据。
+2. **连 super（sdc62，11 G）一起回收** —— 等于放弃 Android：切回去只能靠 fastboot 重刷整机。
+   必须先把 boot_a/boot_b/init_boot_a/init_boot_b/misc 的原厂镜像与 /persist 救援包备份到电脑。
+
+注意：
+
+* 切安卓的 restore_debian_v4.sh 原本放在 /data/local/tmp（就是 userdata），格式化 userdata 后它没了；
+  请把 /persist 里的 deb_ib_v4.img 与 restore_debian_v4.sh 另存到电脑，并保留 fastboot + init_boot v4 镜像；
+* 回收 super 前别动 sdc31（init_boot_a）、sdc43（logo_a）与 misc 分区，否则会无限重启 / 变砖；
+* 分区表改动后 systemd 里的 /dev/sdcN 设备号不会变（GPT 编号固定），但如果你重新 mkfs sdc69 就会毁掉 Debian 本体。
