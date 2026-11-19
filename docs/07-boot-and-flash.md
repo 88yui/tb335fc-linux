@@ -143,20 +143,36 @@ WMT 从未启动 ⇒ 无 WiFi 无蓝牙。修复：把 vendor/bin + firmware（8
 | /dev/sdc43 | 16 M | logo_a | 开机 logo（121 帧 zlib，见第 6 节） |
 | /dev/sdc52/53/54 | 16/64/64 M | lk_b, boot_b, vendor_boot_b | Android B 槽引导（保持原样） |
 | /dev/sdc61 | 11.5 M | init_boot_b | Android B 槽 init_boot |
-| /dev/sdc62 | 11 G | super | Android system/vendor/product 的动态分区，**Android 能否启动全靠它** |
+| /dev/sdc62 | 11 G | super | 已于 2026-11-19 格式化为 ext4（linux_super）→ /mnt/super |
 | /dev/sdc69 | 60 G | debian_root | Debian 根：/ = 子目录 sdroot，/persist = 该分区根（里面放救援镜像） |
-| /dev/sdc72 | 46.7 G | userdata | Android /data，**目前未挂载，可回收** |
+| /dev/sdc72 | 46.7 G | userdata | 已于 2026-11-19 格式化为 ext4（linux_userdata）→ /data |
 
-要把 Android 的空间让给 Linux，两种做法：
+### 9.1 已执行：super + userdata 全部回收（2026-11-19 22:58）
 
-1. **只回收 userdata（sdc72，46.7 G）** —— 推荐。mkfs 成 ext4 后挂到 /data 或 /home，
-   Android 仍能启动（相当于恢复出厂），随时可以切回去；风险只在丢 Android 用户数据。
-2. **连 super（sdc62，11 G）一起回收** —— 等于放弃 Android：切回去只能靠 fastboot 重刷整机。
-   必须先把 boot_a/boot_b/init_boot_a/init_boot_b/misc 的原厂镜像与 /persist 救援包备份到电脑。
+用户确认放弃 Android 后，两个分区都 mkfs.ext4 并挂进 Debian：
 
-注意：
+| 分区 | 新文件系统 | 标签 | UUID | 挂载点 |
+| --- | --- | --- | --- | --- |
+| /dev/sdc62（原 super，11 G） | ext4 | linux_super | a5cf3263-cfe9-4c7e-8d29-ed76809079d9 | /mnt/super |
+| /dev/sdc72（原 userdata，46.7 G） | ext4 | linux_userdata | a03ce644-899a-466b-8d24-8da6b12d0093 | /data |
 
-* 切安卓的 restore_debian_v4.sh 原本放在 /data/local/tmp（就是 userdata），格式化 userdata 后它没了；
-  请把 /persist 里的 deb_ib_v4.img 与 restore_debian_v4.sh 另存到电脑，并保留 fastboot + init_boot v4 镜像；
-* 回收 super 前别动 sdc31（init_boot_a）、sdc43（logo_a）与 misc 分区，否则会无限重启 / 变砖；
-* 分区表改动后 systemd 里的 /dev/sdcN 设备号不会变（GPT 编号固定），但如果你重新 mkfs sdc69 就会毁掉 Debian 本体。
+执行命令（在 Debian 里直接做，两个分区当时都未挂载）：
+
+    sfdisk -d /dev/sdc > /persist/gpt_sdc_backup.txt      # 先备份 GPT
+    mkfs.ext4 -F -L linux_super   -m 1 /dev/sdc62
+    mkfs.ext4 -F -L linux_userdata -m 1 /dev/sdc72
+    mkdir -p /data /mnt/super
+    # /etc/fstab 追加（nofail 防止分区异常时卡启动）
+    UUID=a03ce644-899a-466b-8d24-8da6b12d0093  /data       ext4 defaults,nofail,noatime 0 2
+    UUID=a5cf3263-cfe9-4c7e-8d29-ed76809079d9  /mnt/super  ext4 defaults,nofail,noatime 0 2
+    mount /data && mount /mnt/super && chown desk:desk /data /mnt/super
+
+结果：/data 46 G、/mnt/super 11 G 可用，GPT 原始表保存在 /persist/gpt_sdc_backup.txt（也随仓库 docs 记录）。
+
+### 9.2 注意事项
+
+* **Android 已不可启动**（super 被格式化）：要回去只能 fastboot 重刷原厂固件。
+  切安卓/回 Debian 的 switch_android.sh、restore_debian*.sh 已无用（且原在 /data/local/tmp，随 userdata 一起没了）。
+* 不要动 sdc31（init_boot_a，A9b 修复镜像）、sdc43（logo_a）与 misc 分区，否则无限重启 / 变砖；
+* 重跑 mkfs 会把对应数据全毁：sdc69 是 Debian 本体（/ 与 /persist 都在里面），绝对不能碰；
+* 设备号（/dev/sdcN）由 GPT 编号决定，格式化不改编号。
