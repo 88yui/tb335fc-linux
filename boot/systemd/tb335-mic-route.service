@@ -1,0 +1,12 @@
+[Unit]
+Description=TB335 internal mic capture route (UCM-equivalent mixer settings)
+After=tb335-audio.service
+Wants=tb335-audio.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tb335-mic-route.sh 0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

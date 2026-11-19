@@ -1,0 +1,33 @@
+#!/bin/sh
+# 屏幕键盘开关：无参=确保启动（键盘+拖动条），toggle=关/开切换
+export DISPLAY="${DISPLAY:-:0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+PAT='^/usr/bin/python3 /usr/bin/onboard'
+BARPAT='tb335-kb-move.py'
+X=780; Y=1290
+[ -f /persist/kb-pos.conf ] && . /persist/kb-pos.conf
+running() { pgrep -f "$PAT" >/dev/null 2>&1; }
+getbus() {
+    XPID=$(pgrep -f '^xfce4-session' | head -1)
+    [ -n "$XPID" ] && tr '\0' '\n' < "/proc/$XPID/environ" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p'
+}
+start_bar() {
+    pgrep -f "$BARPAT" >/dev/null 2>&1 && return 0
+    DBUS_SESSION_BUS_ADDRESS="$(getbus)" nohup python3 /usr/local/bin/tb335-kb-move.py >/tmp/kb-bar.log 2>&1 &
+}
+if running; then
+    if [ "$1" = "toggle" ]; then
+        pkill -f "$PAT"; pkill -f "$BARPAT"; exit 0
+    fi
+    start_bar
+    exit 0
+fi
+DBUS_SESSION_BUS_ADDRESS="$(getbus)" nohup /usr/bin/onboard -s 1000x280 -x "$X" -y "$Y" >/tmp/onboard.log 2>&1 &
+i=0
+while [ $i -lt 20 ]; do
+    sleep 0.5
+    xdotool search --class Onboard >/dev/null 2>&1 && break
+    i=$((i+1))
+done
+start_bar
+exit 0

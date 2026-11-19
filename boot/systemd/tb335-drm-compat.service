@@ -1,0 +1,15 @@
+[Unit]
+Description=TB335FC display stack compat shim loader
+DefaultDependencies=no
+After=local-fs.target tb335-drm-rollback.service
+Before=tb335-modules.service
+Requires=tb335-drm-rollback.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tb335-drm-compat-load.sh
+RemainAfterExit=yes
+TimeoutStartSec=60
+
+[Install]
+WantedBy=sysinit.target

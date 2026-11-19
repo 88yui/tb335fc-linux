@@ -1,0 +1,20 @@
+[Unit]
+Description=TB335 Bluetooth bridge (stpbt -> HCI H4) and hci0 power-up
+# 2026-11-18 开机优化：原文件含 Before=multi-user.target，把 40s 的 ExecStartPost 等待
+# 变成整机启动的关键路径（multi-user.target 被拖到 +67s）。现在：
+#   1) 不再 Before=multi-user.target（bt 成为普通成员，active 即放行）；
+#   2) hci0 上电脚本放后台执行，最多等 120s 也不阻塞启动。
+After=tb335-wifi.service
+Before=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c "[ -e /dev/stpbt ] || mknod /dev/stpbt c 192 0"
+ExecStart=/usr/bin/python3 /persist/bt-bridge.py
+ExecStartPost=-/bin/sh -c "nohup /usr/bin/timeout 120 /persist/bt-power.sh >/dev/null 2>&1 &"
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

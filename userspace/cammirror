@@ -1,0 +1,7 @@
+#!/bin/sh
+# cammirror: 控制水平镜像（下一次应用起流生效）
+case "$1" in
+  none|front|rear|both) echo "$1" > /persist/cam_flip; chmod 666 /persist/cam_flip; echo "cam_flip=$1 已保存（下一次起流生效）";;
+  show|"") echo "cam_flip=$(cat /persist/cam_flip 2>/dev/null || echo front)";;
+  *) echo "用法: cammirror none|front|rear|both|show"; exit 1;;
+esac

@@ -1,0 +1,43 @@
+#!/bin/sh
+# tb335-gpu-mode —— 切换 Xorg 的 2D 加速模式
+#   on  : glamor（Mali-G57 / Panfrost，GPU 合成，浏览器视频流畅，桌面偏慢）
+#   off : none  （纯 CPU llvmpipe，桌面轻快，浏览器视频卡）
+# 切换后自动重启桌面。
+
+CONF=/etc/X11/xorg-desktop.conf
+GLAMOR=/etc/X11/xorg-desktop.conf.glamor
+NONE=/etc/X11/xorg-desktop.conf.cpu
+
+case "${1:-}" in
+on|off) ;;
+*) echo "用法: tb335-gpu-mode on|off"; exit 1 ;;
+esac
+
+# 首次运行：把当前配置按模式各存一份
+if [ ! -f "$GLAMOR" ] || [ ! -f "$NONE" ]; then
+	src=$CONF
+	[ -f "$CONF.bak-glamor" ] && src=$CONF.bak-glamor
+	cp "$src" "$NONE"
+	sed -e 's/Option "AccelMethod" "[a-z]*"/Option "AccelMethod" "glamor"/' \
+	    -e '/AccelMethod/a\    Option "DRI" "3"' "$src" | awk '!seen[$0]++ || !/Option "DRI"/' > "$GLAMOR"
+fi
+
+if [ "$1" = "on" ]; then
+	cp "$GLAMOR" "$CONF"
+	echo "已切换到 glamor（GPU）"
+else
+	cp "$NONE" "$CONF"
+	echo "已切换到 none（CPU）"
+fi
+
+grep -E 'AccelMethod|"DRI"' "$CONF"
+
+pkill -9 -x Xorg 2>/dev/null
+sleep 2
+rm -f /tmp/.X11-unix/X0 /tmp/.X0-lock
+setsid nohup /usr/local/bin/tb335-desktop-up.sh >/tmp/desktop-restart.log 2>&1 &
+i=0
+while [ $i -lt 90 ] && [ ! -e /tmp/.X11-unix/X0 ]; do sleep 2; i=$((i+2)); done
+sleep 6
+echo "X 已重启（${i}s），当前渲染器："
+DISPLAY=:0 glxinfo -B 2>/dev/null | grep -E 'Device:|Accelerated:'

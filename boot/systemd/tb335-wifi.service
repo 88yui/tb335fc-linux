@@ -1,0 +1,17 @@
+[Unit]
+Description=TB335 WiFi bring-up (MTK connsys: wmt_loader/launcher + /dev/wmtWifi)
+Documentation=file:/persist/wifi-up.sh
+After=tb335-modules.service
+Wants=tb335-modules.service
+
+[Service]
+# 2026-11-16：wifi 曾阻塞 multi-user.target 达 17 分钟，连带 camdaemon/bluetooth 一起排队。
+# 改为后台执行：本单元立即返回，开机目标不再等 wifi。
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'nohup /persist/wifi-up.sh >/dev/null 2>&1 &'
+TimeoutStartSec=30
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=TB335 3.5mm headphone jack auto-switch (ALSA jack -> HPL/HPR mux)
+After=tb335-audio.service tb335-mic-route.service sound.target
+Wants=tb335-audio.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/tb335-jack-watch.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

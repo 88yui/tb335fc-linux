@@ -1,0 +1,10 @@
+#!/bin/sh
+# 双击 .deb 安装入口：root 直接跑，desk 通过免密 sudo 提权
+f="$1"
+[ -f "$f" ] || exit 1
+if [ "$(id -u)" = "0" ]; then
+    export DISPLAY="${DISPLAY:-:0}"
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+    exec /usr/bin/gdebi-gtk "$f"
+fi
+exec sudo -n /usr/local/bin/tb335-install-deb "$f"

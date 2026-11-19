@@ -1,0 +1,12 @@
+[Unit]
+Description=Create /dev/mali0 node for Mali GPU
+After=tb335-load-modules.service multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tb335-mali0-node.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

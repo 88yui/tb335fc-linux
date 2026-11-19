@@ -1,0 +1,12 @@
+[Unit]
+Description=TB335 /dev/input node sync (no working udev hotplug)
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/bin/sh /persist/input-node-sync.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

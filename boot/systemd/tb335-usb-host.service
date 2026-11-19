@@ -1,0 +1,13 @@
+[Unit]
+Description=TB335 keep USB data role = host when a powered dock is attached
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/tb335-usb-host-watch.sh
+Restart=always
+RestartSec=3
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

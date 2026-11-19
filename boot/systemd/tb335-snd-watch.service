@@ -1,0 +1,14 @@
+[Unit]
+Description=TB335 keep /dev/snd directory traversable (0755)
+After=systemd-udevd.service
+DefaultDependencies=no
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/tb335-snd-watch.sh
+Restart=always
+RestartSec=1
+Nice=-5
+
+[Install]
+WantedBy=sysinit.target

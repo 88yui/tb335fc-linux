@@ -1,0 +1,12 @@
+#!/bin/sh
+# 视频模式：关/开 xcompmgr 软件合成器（看全屏视频更稳，代价是没有阴影/透明）
+export DISPLAY="${DISPLAY:-:0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+if pgrep -x xcompmgr >/dev/null 2>&1; then
+    pkill -x xcompmgr
+    notify-send -i video-x-generic "视频模式：开" "已关闭桌面合成，全屏视频更顺滑；不看视频时再点一次恢复" 2>/dev/null
+else
+    setsid xcompmgr -a >/dev/null 2>&1 &
+    notify-send -i video-x-generic "视频模式：关" "已恢复桌面合成（阴影/透明）" 2>/dev/null
+fi
+exit 0

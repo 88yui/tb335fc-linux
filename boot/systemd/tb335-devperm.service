@@ -1,0 +1,12 @@
+[Unit]
+Description=TB335 device node permissions (snd/rfkill)
+After=systemd-udevd.service
+Wants=systemd-udevd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tb335-devperm.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

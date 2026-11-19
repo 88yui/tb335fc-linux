@@ -1,0 +1,13 @@
+[Unit]
+Description=DHCP for wlan0 after WiFi association
+After=tb335-wifi.service
+Requires=tb335-wifi.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/persist/wifi-dhcp.sh
+TimeoutStartSec=240
+
+[Install]
+WantedBy=multi-user.target

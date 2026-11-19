@@ -1,0 +1,12 @@
+[Unit]
+Description=TB335 panel 60Hz trial guard (auto rollback if not confirmed)
+After=tb335-modules.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tb335-panel60-guard.sh
+KillMode=process
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

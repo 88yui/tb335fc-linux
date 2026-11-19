@@ -1,0 +1,93 @@
+#!/bin/sh
+# tb335-play —— TB335FC 全屏直显播放器（绕过 Xorg，走 DRM 扫描输出）
+#
+# 用法: tb335-play <视频文件>
+# 流程: 停桌面 -> ffmpeg 软解+缩放+转 XRGB -> tb335-sink 直扫上屏(带音频) -> 恢复桌面
+#
+# 依赖: /usr/local/bin/tb335-sink, ffmpeg, ffprobe
+
+set -u
+FILE="${1:-}"
+W=1600
+H=2560
+
+if [ ! -f "$FILE" ]; then
+	echo "用法: tb335-play <视频文件>"
+	exit 1
+fi
+
+IW=$(ffprobe -v error -select_streams v:0 -show_entries stream=width  -of csv=p=0 "$FILE" | head -1)
+IH=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 "$FILE" | head -1)
+FR=$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of csv=p=0 "$FILE" | head -1)
+HAS_AUDIO=$(ffprobe -v error -select_streams a:0 -show_entries stream=index -of csv=p=0 "$FILE" | head -1)
+
+[ -z "$IW" ] || [ -z "$IH" ] && { echo "无法识别视频流"; exit 1; }
+
+FPS=$(echo "$FR" | awk -F/ '{if ($2>0) printf "%.2f", $1/$2; else print 30}')
+[ -z "$FPS" ] && FPS=30
+
+# 等比缩放到 W x H 内，留黑边
+if [ $((IW * H)) -gt $((IH * W)) ]; then
+	SW=$W
+	SH=$((IH * W / IW))
+else
+	SH=$H
+	SW=$((IW * H / IH))
+fi
+SW=$((SW - SW % 2))
+SH=$((SH - SH % 2))
+OX=$(((W - SW) / 2))
+OY=$(((H - SH) / 2))
+
+echo "输入 ${IW}x${IH} @ ${FPS}fps -> 显示 ${SW}x${SH} 居中于 ${W}x${H}" >&2
+
+DESKTOP_STOPPED=0
+
+stop_desktop() {
+	systemctl stop tb335-desktop 2>/dev/null
+	pkill -f xfce4-session 2>/dev/null
+	pkill -f xfwm4 2>/dev/null
+	pkill -f xfce4-panel 2>/dev/null
+	pkill -f Thunar 2>/dev/null
+	pkill -f xcompmgr 2>/dev/null
+	sleep 1
+	pkill -x Xorg 2>/dev/null
+	sleep 0.2
+	DESKTOP_STOPPED=1
+}
+
+start_desktop() {
+	[ "$DESKTOP_STOPPED" = "1" ] || return
+	setsid nohup /usr/local/bin/tb335-desktop-up.sh >/tmp/desktop-restart.log 2>&1 &
+	DESKTOP_STOPPED=0
+	echo "桌面恢复中..." >&2
+	i=0
+	while [ $i -lt 60 ]; do
+		pgrep -x xfce4-session >/dev/null 2>&1 && break
+		sleep 1
+		i=$((i + 1))
+	done
+	echo "桌面已恢复（${i}s）" >&2
+}
+
+trap 'start_desktop' EXIT INT TERM
+
+stop_desktop
+
+VF="scale=${SW}:${SH}:flags=fast_bilinear,pad=${W}:${H}:${OX}:${OY}:black,format=bgr0"
+
+# 走 PulseAudio（它才带正确的 UCM 路由与硬件音量映射）
+export XDG_RUNTIME_DIR=/run/user/0
+
+if [ -n "$HAS_AUDIO" ]; then
+	ffmpeg -hide_banner -loglevel warning -i "$FILE" \
+		-vf "$VF" -pix_fmt bgr0 -f rawvideo - \
+		-map 0:a:0 -af "aresample=async=1:first_pts=0" -f pulse default \
+		2>/tmp/tb335-play.log | /usr/local/bin/tb335-sink xrgb "$FPS"
+else
+	ffmpeg -hide_banner -loglevel warning -i "$FILE" \
+		-vf "$VF" -pix_fmt bgr0 -f rawvideo - \
+		2>/tmp/tb335-play.log | /usr/local/bin/tb335-sink xrgb "$FPS"
+fi
+
+echo "播放结束" >&2

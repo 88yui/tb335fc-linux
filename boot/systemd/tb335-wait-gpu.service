@@ -1,0 +1,15 @@
+[Unit]
+Description=TB335 wait for usable Mali render node before the display manager
+After=tb335-hide-dp.service
+Wants=tb335-hide-dp.service
+Before=display-manager.service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=420
+ExecStart=/usr/local/sbin/tb335-wait-gpu.sh
+
+[Install]
+WantedBy=multi-user.target

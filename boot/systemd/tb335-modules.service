@@ -1,0 +1,18 @@
+[Unit]
+Description=TB335 sequential kernel module loader (replaces udev parallel coldplug)
+Documentation=file:/usr/local/sbin/tb335-load-modules.sh
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+ConditionPathExists=/lib/modules
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 稍晚于系统完成启动再加载，复现"手动顺序加载"这一已验证安全的环境
+ExecStartPre=/bin/sleep 3
+ExecStart=/usr/local/sbin/tb335-load-modules.sh
+TimeoutStartSec=600
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

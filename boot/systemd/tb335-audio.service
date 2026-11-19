@@ -1,0 +1,14 @@
+[Unit]
+Description=TB335 audio bring-up (modprobe machine driver + mknod /dev/snd)
+# 2026-10-30 修正：原为 After=multi-user.target，与本单元的 WantedBy=multi-user.target
+# 构成自我循环依赖，systemd 解环时会随机丢弃本单元的启动任务（开机无声卡）。
+# 改成只依赖基础目标，让它作为 multi-user.target 的普通成员被正常拉起。
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /persist/audio-up.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

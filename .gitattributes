@@ -1,0 +1,10 @@
+# 一律 LF 存储，避免 Windows 检出把 shell/python 脚本变成 CRLF（会破坏 shebang）
+* text=auto eol=lf
+
+# 二进制：不要做任何行尾或文本处理
+*.ko binary
+*.img binary
+*.tgz binary
+*.gz binary
+*.png binary
+*.jpg binary

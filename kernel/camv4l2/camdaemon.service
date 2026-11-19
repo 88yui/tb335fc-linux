@@ -1,0 +1,12 @@
+[Unit]
+Description=MT6835 CAM_A V4L2 auto feed daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/bin/sh /root/camdaemon.sh
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

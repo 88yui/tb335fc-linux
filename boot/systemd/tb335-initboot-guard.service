@@ -1,0 +1,11 @@
+[Unit]
+Description=TB335 init_boot_a guard (reflash v4 A9b initramfs if reverted)
+After=local-fs.target
+ConditionPathExists=/dev/sdc31
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/tb335-initboot-guard.sh
+
+[Install]
+WantedBy=multi-user.target

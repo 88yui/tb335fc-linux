@@ -1,0 +1,12 @@
+#!/bin/sh
+# TB335: 预热 GPU —— 第一次作业会超时触发 reset，之后才正常
+cd /usr/local/lib/tb335 || exit 0
+for i in 1 2 3; do
+    r=$(timeout 30 python3 warmup.py 2>&1 | grep '像素 =')
+    case "$r" in
+        *"230,51,102"*) echo "warmup OK (第 $i 次)"; exit 0;;
+    esac
+    sleep 2
+done
+echo "warmup 未成功（可能需要更多次）"
+exit 0

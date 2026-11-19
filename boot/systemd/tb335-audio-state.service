@@ -1,0 +1,6 @@
+[Unit]
+Description=TB335 apply working audio mixer state
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tb335-audio-state.sh

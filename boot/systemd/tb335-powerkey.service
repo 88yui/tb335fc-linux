@@ -1,0 +1,14 @@
+[Unit]
+Description=TB335 power key handler (short=screen off+lock, long=shutdown menu)
+Documentation=file:/etc/tb335-powerkey.conf
+After=systemd-logind.service
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/tb335-powerkey.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[Unit]
+Description=TB335 hide false-connected writeback DP connector
+After=local-fs.target
+Before=display-manager.service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=360
+ExecStart=/usr/local/sbin/tb335-hide-dp.sh
+
+[Install]
+WantedBy=multi-user.target
