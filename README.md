@@ -12,7 +12,7 @@
 | 实时链路（含 ISP） | 可用，1280×960 与 1632×1224 在 30 fps 下稳定 |
 | 标准 V4L2 节点给普通应用（微信 / QQ / Chromium / ffmpeg / GStreamer） | 可用，双节点（后摄 / 前置）+ 私有推流口 |
 | 前置摄像头 | 可用，2592×1944 满帧；连续模式需每帧 CPU kick（见 docs/06） |
-| 自动对焦（后摄 VCM GT9764AF） | **回归**：AF 版在独立分支 camvid_af.c，本仓库 camvid.c 不含 AF（见 VERSIONS.md） |
+| 自动对焦（后摄 VCM GT9764AF） | 可用，AF 状态机已合并进 camvid.c；暗光低帧率下按 max(4 帧, 250 ms) 等 VCM 稳定 |
 | AWB / tone / TNR / 去马赛克 | 用户态实现，参数已固化进 camdaemon |
 | CCM / GGM / 原厂 tuning | 未采用（见 docs/09-roadmap.md） |
 | 冷启动 / 关机 / 熄屏 / 开机时间 | 修复已合入（init_boot v4、kpoc、关机清理、29.3 s 启动） |

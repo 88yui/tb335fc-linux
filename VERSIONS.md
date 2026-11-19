@@ -7,7 +7,7 @@
 
 | 仓库文件 | 设备路径 | MD5 |
 | --- | --- | --- |
-| userspace/camvid.c | /root/camvid.c | b6f37ab288778c1ea973c4f137f08721 |
+| userspace/camvid.c | /root/camvid.c | 9fcbf38d22e71bd26d0c82cf9b70d1bb |
 | userspace/camrec5.c | /root/camrec5.c | 73ed608d85ad3a575145ba4c8ab122e6 |
 | userspace/camrec6.c | /root/camrec6.c | 5d83f10dcb1450919a9bbcf54f162b87 |
 | userspace/camisp.c | /root/camisp.c | 2de38f5473f0e92a29c0e74fd989e633 |
@@ -36,14 +36,14 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
 
 | 程序 | 日期 | MD5 前 8 位 |
 | --- | --- | --- |
-| /root/camvid | 2026-11-19 04:51 | 08d2c058 |
+| /root/camvid（含 AF，旧版备份 /root/camvid.bak-20261119） | 2026-11-19 22:50 | 37247e85 |
 | /root/camfront | 2026-11-18 21:56 | 1c6dad40 |
 | /root/camrec6 | 2026-11-19 03:33 | 8e8993ce |
 | /root/camrec5 | — | 86d9e3e2 |
 | /root/camisp | — | a394768f |
 | camfeedfmt | — | fb3169a1 |
 | camfeedstat | — | 14297f6c |
-| camvid_af（AF 分支） | 2026-11-18 21:39 | b5fe5050 |
+| camvid_af（历史 AF 分支，已被合并版取代） | 2026-11-18 21:39 | b5fe5050 |
 
 ## 4. 镜像
 
@@ -82,9 +82,11 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
 
 ## 6. 已知分支差异
 
-* **AF**：`camvid_af.c`（127,148 B，2026-11-18）含自动对焦状态机与 --af/--af-iv；
-  本仓库的 `camvid.c`（122,119 B，2026-11-19）**没有** AF 代码 —— 这是当前唯一的功能性缺口。
-  设备上 /root/camvid_af 是能用的 AF 二进制。
+* **AF（已合并）**：原 `camvid_af.c`（127,148 B，2026-11-18）的对焦状态机、VCM init、`-w/-W/--af/--af-iv/--af-start` 参数已并入 `userspace/camvid.c`
+  （相对 11-19 基线 +182/-1 行，其余逻辑未改），设备上 `/root/camvid` 已换成合并版（md5 37247e85…），`/root/camvid_af` 仅作历史备份。
+  算法要点：粗扫 9 点 step128 → 细扫 step24 → 三点抛物线取亚步长峰值；评价函数 3×3 平滑 + 置信度 conf≥1.25；
+  ★VCM 稳定等待必须 max(4 帧, 250 ms)：暗光 4.6 fps 时只等 300 ms 会在镜头运动中采样，峰值从 DAC≈336 漂到 466、出图发虚。
+  实测：15 fps 固定曝光收敛 333–383，暗光 AE（4.6 fps）收敛 332–335，生产 camdaemon 12.5 fps 链路收敛 332–335（conf 2.0–2.7）。
 * **前置 ISP**：`camfront.c` + `isp_front.c` 是前置专用副本（含 hflip 与前置几何），与后摄 isp_lib 同源不同版。
 
 ## 7. 环境

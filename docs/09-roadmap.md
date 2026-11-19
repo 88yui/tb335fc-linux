@@ -12,20 +12,19 @@
 | 自写 camv4l2 + camfeed | 可用 | v4l2-ctl / ffmpeg / GStreamer / Chromium 全通 |
 | camdaemon 按需起流 | 可用 | 应用开流才起管线 |
 | 前置 GC05A2 满帧 | 可用 | 6,298,560 B/帧；端口 2 / seninf5 |
+| 后摄自动对焦（VCM GT9764AF） | 可用 | AF 已并入 camvid.c；15 fps 收敛 333–383、暗光 4.6 fps 332–335 |
 | 启动 / 关机 / 电源键 / logo / 冷启动卡 logo | 已修 | 105 s → 29.3 s；poweroff 6.4 s |
 | WiFi / 蓝牙 | 已修 | wlan0 DHCP、BT Powered=yes |
 
 ## 未完成 / 已知短板
 
-1. **AF 回归**：对焦版本在独立分支（camvid_af.c），当前合并进仓库的 camvid.c **不含 AF 代码**，
-   camdaemon 传 --af 会被静默忽略。要恢复需把 AF 状态机合并回 camvid.c。
-2. **噪点**：与 Android 参考 JPEG 差约 5 倍，缺 MFNR（多帧降噪）。
-3. **CCM / GGM**：MTK tuning blob 的 CCM 格式已破解（6×376 B，13-bit 有符号 + Q9），
+1. **噪点**：与 Android 参考 JPEG 差约 5 倍，缺 MFNR（多帧降噪）。
+2. **CCM / GGM**：MTK tuning blob 的 CCM 格式已破解（6×376 B，13-bit 有符号 + Q9），
    但不能 1:1 套用（属于 MTK 自己的 AWB 域，硬套 dE 变差）。GGM 还没找到对应的 DIP 窗。
-4. **EEPROM**：后摄 EEPROM（i2c-8 0x58，仅上电时 ACK）已 dump 4096 B，非标准 MTK cam_cal 布局，格式未解。
-5. **V4L2 控制接口**：没有实现 CID（亮度/曝光/增益/白平衡）控件，应用不能调参数。
-6. **空闲功耗**：camdaemon 只是停管线，没有做相机域的下电策略。
-7. **前置**：连续模式不可用（每帧 CPU kick），与后摄不能真正并发高帧率。
+3. **EEPROM**：后摄 EEPROM（i2c-8 0x58，仅上电时 ACK）已 dump 4096 B，非标准 MTK cam_cal 布局，格式未解。
+4. **V4L2 控制接口**：没有实现 CID（亮度/曝光/增益/白平衡）控件，应用不能调参数。
+5. **空闲功耗**：camdaemon 只是停管线，没有做相机域的下电策略。
+6. **前置**：连续模式不可用（每帧 CPU kick），与后摄不能真正并发高帧率。
 
 ## 建议的下一步（按性价比）
 
@@ -33,7 +32,6 @@
 | --- | --- | --- | --- |
 | P0 | 定参数固化：把 daemon 里那套参数写死成默认值，去掉环境变量依赖 | 半天 | 低 |
 | P1 | MFNR：3~5 帧对齐累加，夜间噪点直接改善一档 | 3~5 天 | 中 |
-| P2 | AF 合并回主分支：恢复 --af / --af-iv | 1 天 | 低 |
 | P3 | V4L2 控件（V4L2_CID_BRIGHTNESS/EXPOSURE_AUTO 等） | 2~3 天 | 中 |
 | P4 | 相机域空闲下电 + 唤醒 | 2 天 | 中高 |
 | P5 | 长稳回归：8 小时连续取流 + 温度 | 1 天 | 低 |

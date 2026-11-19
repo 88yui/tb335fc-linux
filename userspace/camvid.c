@@ -7,6 +7,7 @@
  */
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -121,6 +122,158 @@ static int force_pm(const char *dev,const char *state){
 }
 static void force_larbs(const char *state){ for(int i=0;LARBS[i];i++) force_pm(LARBS[i],state); }
 static uint32_t chk4k(uint8_t *p){ uint32_t h=2166136261u; for(int i=0;i<4096;i++){ h^=p[i]; h*=16777619u; } return h; }
+// ---- VCM(AF) 对焦控制（afreg.ko 提供 /proc/afreg）----
+/* AE 状态在这些定义之后才声明（1485 行附近），AF 早退判断要用到，先做前置声明 */
+static int g_ae, g_cur_exp, g_cur_gain;
+static int g_focus_dac=-1, g_fsw_n=0, g_fsw_start=0, g_fsw_step=0, g_fsw_i=0, g_fsw_state=0, g_fsw_settle=0, g_fsw_cnt=0;
+static double g_fsw_acc=0;
+static void vcm_cmd(const char *fmt,...){
+  char b[96]; va_list ap; va_start(ap,fmt); vsnprintf(b,sizeof(b),fmt,ap); va_end(ap);
+  FILE *f=fopen("/proc/afreg","w"); if(!f) return; fputs(b,f); fputc('\n',f); fclose(f);
+}
+static void vcm_init(void){ vcm_cmd("w8 02 02"); vcm_cmd("w8 06 40"); vcm_cmd("w8 07 78"); usleep(2000); }
+static void vcm_dac(int d){ vcm_cmd("ww 03 %04x", d); }
+// ---- 自动对焦（爬山：粗扫 128 步长 -> 细扫 32 步长），非阻塞，挂在采集循环上 ----
+static volatile int got_global=0;
+static int g_af=0, g_af_iv_ms=0, g_af_start_got=0;
+static double g_af_nextat=0;
+static int af_state=0;   /* 0 idle,1 coarse,2 fine,3 done */
+static int af_i=0, af_ndac=0, af_settle=0, af_cnt=0, af_best_dac=-1;
+static double af_acc=0, af_best_m=-1, af_vals[40];
+static int af_dacs[40];
+static int g_af_runs=0;
+// 后摄 3264x2448 stride 4080 BGGR，中心 1024x768，归一化 Tenengrad（与曝光无关）
+static double focus_metric(uint8_t *p){
+  enum {ROW=4080, W=3264, H=2448};
+  static float g[384][512];
+  int qw=512, qh=384;
+  int xq0=W/4-qw/2, yq0=H/4-qh/2;
+  for(int j=0;j<qh;j++){
+    int y=2*(yq0+j);
+    const uint8_t *r0=p+(size_t)y*ROW, *r1=p+(size_t)(y+1)*ROW;
+    for(int i=0;i<qw;i++){
+      int x=2*(xq0+i);
+      int m=x>>2, off=x&3;
+      const uint8_t *q0=r0+m*5, *q1=r1+m*5;
+      uint64_t w0=(uint64_t)q0[0]|((uint64_t)q0[1]<<8)|((uint64_t)q0[2]<<16)|((uint64_t)q0[3]<<24)|((uint64_t)q0[4]<<32);
+      uint64_t w1=(uint64_t)q1[0]|((uint64_t)q1[1]<<8)|((uint64_t)q1[2]<<16)|((uint64_t)q1[3]<<24)|((uint64_t)q1[4]<<32);
+      unsigned ga = (off==0)? (unsigned)((w0>>10)&0x3FF) : (unsigned)((w0>>30)&0x3FF);
+      unsigned gb = (off==0)? (unsigned)(w1&0x3FF) : (unsigned)((w1>>20)&0x3FF);
+      g[j][i]=(float)((ga+gb)*0.5f);
+    }
+  }
+  /* 3x3 空间平滑：暗光下 AE 增益会把读出噪声放大，噪声梯度会盖过真实对焦响应
+   * （实测 gain=0x86 时粗扫曲线被噪声压平、峰值漂到 DAC 512）。 */
+  static float b[384][512];
+  for(int j=0;j<qh;j++) for(int i=0;i<qw;i++){
+    float sum=0; int cnt=0;
+    for(int dj=-1;dj<=1;dj++){ int jj=j+dj; if(jj<0||jj>=qh) continue;
+      for(int di=-1;di<=1;di++){ int ii=i+di; if(ii<0||ii>=qw) continue; sum+=g[jj][ii]; cnt++; } }
+    b[j][i]=sum/(float)cnt;
+  }
+  double sf=0, sg=0; long n=0;
+  for(int j=0;j<qh-1;j++) for(int i=0;i<qw-1;i++){
+    double gx=b[j][i+1]-b[j][i], gy=b[j+1][i]-b[j][i];
+    sf+=gx*gx+gy*gy; sg+=b[j][i]; n++;
+  }
+  double mean=sg/(double)n;
+  return sf/(double)n/(mean*mean+1.0);
+}
+
+static double af_deadline=0;
+static int af_waitf=0;                /* 变更 DAC 后至少丢弃的帧数 */
+static double g_af_settle_ms=250.0;   /* VCM 稳定最短等待，可由 CAMREC_AF_SETTLE_MS 覆盖 */
+static int g_af_need=2;               /* 每点平均帧数，可由 CAMREC_AF_NEED 覆盖 */
+/* VCM 机械稳定需要 ~300ms：原来按「2 帧」算，在 12.5fps 下只有 160ms，
+ * 实测同一 DAC 的 metric 比充分稳定后低 2 倍，峰值会判错。改成按时间等。 */
+/* VCM 机械稳定 = max(4 帧, 250ms)：15fps 下 4 帧≈267ms 已验证够用；暗光 4.6fps 时
+ * 4 帧≈860ms 才够（只按 300ms 算时 Metric 会在镜头还在动的时候采样，
+ * 实测同一颗镜头峰值从 DAC≈336 漂到 ≈466，图明显虚）。 */
+static void af_apply(int dac){ vcm_dac(dac); af_waitf=4; af_deadline=now_ms()+g_af_settle_ms; af_cnt=0; af_acc=0; }
+static void af_begin(void){
+  /* 暗光（AE 长时间曝光 + 高增益）下噪声梯度会盖过真实对焦响应：实测同一颗镜头
+   * 固定曝光峰值 DAC≈384，而 gain=130/exp=16367 时峰值漂到 ≈454。
+   * 已经有上一次可靠对焦结果时，暗光就不扫了，保持原位。 */
+  if(g_ae && g_focus_dac>=0 && (g_cur_gain>0x40 || g_cur_exp>9000)){
+    printf("AF SKIP dark exp=%d gain=%d keep_dac=%d\n", g_cur_exp, g_cur_gain, g_focus_dac);
+    af_state=3; g_af_nextat=now_ms()+(double)g_af_iv_ms;
+    return;
+  }
+  /* 粗扫 9 点（step128）覆盖整程：初版 step256 会漏掉 DAC≈384 的峰值 */
+  af_ndac=0; for(int d=0; d<=1024; d+=128) af_dacs[af_ndac++]=d;
+  af_state=1; af_i=0; af_best_dac=-1; af_best_m=-1; g_af_runs++;
+  printf("AF begin run=%d coarse=%d points\n", g_af_runs, af_ndac);
+  af_apply(af_dacs[0]);
+}
+static void af_tick(uint8_t *p){
+  double now=now_ms();
+  if(af_state==0){
+    if(got_global>=g_af_start_got && now>=g_af_nextat) af_begin();
+    return;
+  }
+  if(af_state==1 || af_state==2){
+    if(af_waitf>0){ af_waitf--; return; }
+    if(now<af_deadline) return;
+    double m=focus_metric(p); af_acc+=m; af_cnt++;
+    int need=g_af_need;
+    if(af_cnt<need) return;
+    double avg=af_acc/(double)need; int dac=af_dacs[af_i];
+    af_vals[af_i]=avg;
+    printf("AF %s dac=%-4d metric=%.6f\n", af_state==1?"coarse":"fine", dac, avg);
+    if(avg>af_best_m){ af_best_m=avg; af_best_dac=dac; }
+    af_i++;
+    if(af_state==1 && af_i>=af_ndac){
+      /* 用粗扫三点抛物线取中心，再 ±96 细扫 */
+      int bi=0; for(int k=1;k<af_ndac;k++) if(af_vals[k]>af_vals[bi]) bi=k;
+      int c=af_dacs[bi], lo=c-96, hi=c+96;
+      if(lo<0) lo=0; if(hi>1023) hi=1023;
+      af_ndac=0; for(int d=lo; d<=hi; d+=24) af_dacs[af_ndac++]=d;
+      if(af_ndac<2){ af_ndac=0; af_dacs[af_ndac++]=c; }
+      af_state=2; af_i=0; af_best_m=-1; af_best_dac=-1;
+      printf("AF coarse best dac=%d -> fine %d..%d step24 (%d pts)\n", c, lo, hi, af_ndac);
+      af_apply(af_dacs[0]);
+      return;
+    }
+    if(af_state==2 && af_i>=af_ndac){
+      /* 细扫三点抛物线拟合，取亚步长顶点（步长=af_dacs[1]-af_dacs[0]） */
+      int best_i=0; for(int k=1;k<af_ndac;k++) if(af_vals[k]>af_vals[best_i]) best_i=k;
+      int dout=af_dacs[best_i];
+      if(best_i>0 && best_i<af_ndac-1){
+        double y0=af_vals[best_i-1], y1=af_vals[best_i], y2=af_vals[best_i+1];
+        double den=(y0-2.0*y1+y2);
+        if(den<-1e-12){
+          double off=0.5*(y0-y2)/den; if(off>1.0) off=1.0; if(off<-1.0) off=-1.0;
+          int st=af_dacs[1]-af_dacs[0];
+          dout=af_dacs[best_i]+(int)(off*st+0.5);
+          if(dout<0) dout=0; if(dout>1023) dout=1023;
+        }
+      }
+      /* 置信度：细扫峰值 / 中位数。太平时（暗光、纯色墙、无纹理）不动镜头，
+       * 避免把已经对好的位置扫到噪声峰值上。 */
+      {
+        double vals[40]; int nv=af_ndac; memcpy(vals,af_vals,sizeof(double)*nv);
+        for(int x=1;x<nv;x++){ double v=vals[x]; int y=x-1; while(y>=0&&vals[y]>v){ vals[y+1]=vals[y]; y--; } vals[y+1]=v; }
+        double med = vals[nv/2]; if(med<1e-9) med=1e-9;
+        double conf = af_best_m/med;
+        if(conf < 1.25){
+          int keep=(g_focus_dac>=0)?g_focus_dac:af_best_dac;
+          printf("AF SKIP low contrast conf=%.2f (<1.25) keep_dac=%d (peak_dac=%d metric=%.6f)\n", conf, keep, dout, af_best_m);
+          dout=keep; af_best_dac=keep;
+        } else {
+          printf("AF DONE best_dac=%d (peak_pt=%d metric=%.6f conf=%.2f)\n", dout, af_best_dac, af_best_m, conf);
+          af_best_dac=dout;
+        }
+        g_focus_dac=af_best_dac;
+      }
+      af_state=3;
+      g_af_nextat = now_ms() + (double)g_af_iv_ms;
+      return;
+    }
+    af_apply(af_dacs[af_i]);
+    return;
+  }
+  if(af_state==3){ if(g_af_iv_ms>0 && now>=g_af_nextat) af_begin(); }
+}
 
 static const uint32_t *GOLD_DATA_PTR;
 static const size_t GOLD_DATA_LEN = 30712;
@@ -1735,8 +1888,16 @@ int main(int argc,char**argv){
     else if(!strcmp(argv[i],"--csup")&&i+1<argc) g_vcsup=atof(argv[++i]);
     else if(!strcmp(argv[i],"--vcontrast")&&i+1<argc) g_vcontrast=atof(argv[++i]);
     else if(!strcmp(argv[i],"--vgamma")&&i+1<argc) g_vgamma=atof(argv[++i]);
+    else if(!strcmp(argv[i],"-w")&&i+1<argc) g_focus_dac=(int)strtol(argv[++i],NULL,0);
+    else if(!strcmp(argv[i],"--af")) g_af=1;
+    else if(!strcmp(argv[i],"--af-iv")&&i+1<argc) g_af_iv_ms=atoi(argv[++i])*1000;
+    else if(!strcmp(argv[i],"--af-start")&&i+1<argc) g_af_start_got=atoi(argv[++i]);
+    else if(!strcmp(argv[i],"-W")&&i+1<argc){ const char *s=argv[++i]; g_fsw_start=atoi(s); while(*s&&*s!=',')s++; if(*s==',')s++; g_fsw_step=atoi(s); while(*s&&*s!=',')s++; if(*s==',')s++; g_fsw_n=atoi(s); }
   }
   if(saveevery<1) saveevery=1;
+  { const char *e=getenv("CAMREC_AF_SETTLE_MS"); if(e&&atof(e)>0) g_af_settle_ms=atof(e);
+    const char *n=getenv("CAMREC_AF_NEED"); if(n&&atoi(n)>0) g_af_need=atoi(n); }
+  if(g_af && g_af_start_got<=0) g_af_start_got = g_ae ? 75 : 20;
   if(N>100000) N=100000;
   if(N<1) N=1;
   printf("=== camrec start N=%d prefix=%s ===\n",N,prefix);
@@ -1784,6 +1945,7 @@ int main(int argc,char**argv){
       printf("SEN[chk]"); for(int i=0;i<8;i++) printf(" %04X=%04X",sr[i],sread(sr[i])&0xFFFF); printf("\n"); }
   }
   swrite(0x0100,1);
+  if(g_focus_dac>=0 || g_fsw_n>0 || g_af){ vcm_init(); if(g_focus_dac>=0) vcm_dac(g_focus_dac); printf("VCM init ok fixed_dac=%d sweep_n=%d af=%d iv=%dms start_got=%d\n", g_focus_dac, g_fsw_n, g_af, g_af_iv_ms, g_af_start_got); }
   {
     uint32_t e=(uint32_t)sen_rd_exp();
     g_cur_exp=(int)e;
@@ -2044,12 +2206,17 @@ int main(int argc,char**argv){
         if(g_sweep_codes[idx2]!=g_cur_gain){ sen_set_gain(g_sweep_codes[idx2]); printf("SWEEP set gain=%d\n",g_cur_gain); }
         double m,cl,pm,pq; framestats(slot_ptr[prev_slot],framebytes,&m,&cl,&pm,&pq);
         printf("STAT got=%d gain=%d mean=%.2f clip=%.4f pmax=%.0f p995=%.0f\n",got,g_cur_gain,m,cl,pm,pq);
-      } else if(g_ae){
+      } else if(g_ae && !(g_af && (af_state==1||af_state==2))){
+        /* AF 扫描期间冻结 AE：曝光/增益变化会改变噪声水平，直接污染对焦评价函数
+         * （实测同一 DAC 在不同时刻 metric 差 3 倍，导致峰值判错） */
         if(g_aestep_at>0 && got==g_aestep_at){ int he=g_cur_exp/4; if(he<16)he=16;
           printf("AE STEP force exp %d->%d\n",g_cur_exp,he); sen_set_exp(he); g_cur_exp=he; }
         if(g_ae_tgt2_n>0 && got==g_ae_tgt2_n){ printf("AE STEP target %d->%d\n",g_ae_target_p995,g_ae_tgt2);
           g_ae_target_p995=g_ae_tgt2; }
         ae_update(slot_ptr[prev_slot],framebytes);
+      } else if(g_af && (af_state==1||af_state==2)){
+        static int hold_once=0;
+        if(!hold_once){ hold_once=1; printf("AF hold AE exp=%d gain=%d vts=%d\n",g_cur_exp,g_cur_gain,g_vts_cur); }
       }
     }
     uint32_t reg=rd(CAM_A+0x4820);
@@ -2058,6 +2225,20 @@ int main(int argc,char**argv){
     else if(idx==(cur+SLOTS-1)%SLOTS){ lag++; }
     else if(idx!=cur){ printf("  WARN hw slot=%d expect=%d fc=0x%08X\n",idx,cur,last); badslot++; }
     prev_slot=cur;
+    if(g_fsw_n && prev_slot>=0 && got>=12){
+      if(g_fsw_state==0){ int dac=g_fsw_start+g_fsw_i*g_fsw_step; vcm_dac(dac); g_fsw_settle=4; g_fsw_state=1; g_fsw_acc=0; g_fsw_cnt=0; }
+      else {
+        if(g_fsw_settle>0) g_fsw_settle--;
+        else { double mm=focus_metric(slot_ptr[prev_slot]); int dac=g_fsw_start+g_fsw_i*g_fsw_step;
+          g_fsw_acc+=mm; g_fsw_cnt++;
+          printf("  FMETER dac=%d got=%d metric=%.6f\n", dac, got, mm);
+          if(g_fsw_cnt>=3){ printf("FOCUS dac=%d metric=%.6f\n", dac, g_fsw_acc/3.0); g_fsw_i++; g_fsw_state=0; if(g_fsw_i>=g_fsw_n) g_fsw_n=0; } }
+      }
+    } else if(!g_fsw_n && g_focus_dac>=0 && got>=6 && got<=8 && prev_slot>=0){
+      printf("FOCUS fixed dac=%d got=%d metric=%.6f\n", g_focus_dac, got, focus_metric(slot_ptr[prev_slot]));
+    }
+    got_global=got;
+    if(g_af && prev_slot>=0 && !g_fsw_n) af_tick(slot_ptr[prev_slot]);
     printf("  FRAME %02d fc=0x%08X slot=%d hw=%d reg4820=0x%08X 1F78=0x%08X 1F3C=0x%08X 158=0x%08X dt=%.1fms\n",
       got,last,cur,idx,reg,rd(CAM_A+0x1F78),rd(CAM_A+0x1F3C),rd(CAM_A+0x158),dt);
     if((got%100)==0){
