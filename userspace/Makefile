@@ -1,12 +1,14 @@
 # 在设备上原生编译（Debian arm64，gcc 14.2）
+# 注意：isp_lib.c / isp_front.c 用 OpenMP（omp_get_wtime + #pragma omp），必须带 -fopenmp
 #   make            产出主程序
 #   make tools      产出测试工具
 #   make install    装到 /usr/local/bin（需要 root）
 
-CC      ?= gcc
+CC      := gcc
 CFLAGS  ?= -O2 -Wall -Wextra -Wno-unused-parameter
-CFLAGS  += -pthread
-LDLIBS  ?= -lm -pthread
+CFLAGS  += -pthread -fopenmp -I$(CURDIR)
+LDLIBS  ?= -lm -pthread -fopenmp
+# 注：1) isp_lib.c/isp_front.c 用 OpenMP，必须 -fopenmp；2) tools/isptest.c 在 tools/ 下引用 isp_lib.h，需 -I$(CURDIR)
 PREFIX  ?= /usr/local/bin
 
 PROGS  = camrec5 camrec6 camvid camfront camisp

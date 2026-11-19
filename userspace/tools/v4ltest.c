@@ -7,6 +7,7 @@
 #include <sys/mman.h>
 #include <linux/videodev2.h>
 #include <errno.h>
+#include <time.h>
 int main(int argc,char**argv){
   const char *path=argc>1?argv[1]:"/dev/video3";
   int want=argc>2?atoi(argv[2]):12;
