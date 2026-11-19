@@ -20,7 +20,7 @@ make -C "$KDIR" O="$OBD" M="$MDIR" $ARGS clean >/dev/null 2>&1 || true
 make -C "$KDIR" O="$OBD" M="$MDIR" $ARGS modules 2>&1 | tail -20
 
 echo '=== 产物 ==='
-ls -l "$MDIR/camreg.ko"
-strings "$MDIR/camreg.ko" | grep -E '^vermagic='
-cp -f "$MDIR/camreg.ko" "$W/camreg/camreg_isp.ko"
+ls -l "$MDIR/camreg_isp.ko"
+strings "$MDIR/camreg_isp.ko" | grep -E '^vermagic='
+cp -f "$MDIR/camreg_isp.ko" "$W/camreg/camreg_isp.ko"
 echo '=== 已复制到 临时/camreg/camreg_isp.ko ==='

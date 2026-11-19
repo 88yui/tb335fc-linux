@@ -204,6 +204,10 @@ module_param_named(devcamsys, g_devcamsys, int, 0444);
  * 同一套页表」这个假设。例：devname=14000000.dispsys_config */
 static char g_devname[64];
 module_param_string(devname, g_devname, sizeof(g_devname), 0444);
+/* 测试用：强制跳过 GFP_DMA32（验证 ZONE_NORMAL + IOMMU 路径） */
+static int force_nodma32;
+module_param(force_nodma32, int, 0644);
+MODULE_PARM_DESC(force_nodma32, "1 = 跳过 ZONE_DMA32，直接从普通内存分配（需 IOMMU 映射）");
 
 static const char *camreg_devname(void)
 {
@@ -357,7 +361,7 @@ static int camreg_buf_alloc(struct camreg_alloc *a)
 {
 	struct camreg_buf *b = NULL;
 	size_t size = a->size;
-	int i;
+	int i, gfp_pass;
 
 	if (!size || size > (32 << 20))
 		return -EINVAL;
@@ -376,36 +380,49 @@ static int camreg_buf_alloc(struct camreg_alloc *a)
 	size = PAGE_ALIGN(size);
 
 	/* CAMSV 的 IMGO 基址寄存器只有 32 位（外加一个语义不明的 MSB 寄存器
-	 * 0x478），所以缓冲必须落在 4GB 以内：每块都用 GFP_DMA32 从 ZONE_DMA32
-	 * 里拿页，失败再退回普通分配（并打印 PA 方便排查）。
+	 * 0x478），所以缓冲**优先**用 GFP_DMA32 从 ZONE_DMA32 里拿页，保证 PA < 4GB
+	 * （无 IOMMU 域时 dma_map_page 失败会退化成恒等映射 iova=PA，也必须 <4GB）。
 	 *
 	 * 一次 alloc_pages(order) 拿 10/12/16 MB 分别要 order 11/12/12，buddy
 	 * 里没有这么大的连续块 → 直接 -ENOMEM（4 MB = order 10 能过）。所以这里
-	 * 按 4 MB 切块申请，失败逐级降到 2 MB / 1 MB。 */
-	for (b->chunk_order = 10; b->chunk_order >= 8; b->chunk_order--) {
-		size_t chunk = PAGE_SIZE << b->chunk_order;
-		int n = DIV_ROUND_UP(size, chunk);
-		int k;
+	 * 按 4 MB 切块申请，失败逐级降到 2 MB / 1 MB。
+	 *
+	 * ★碎片化兜底（2026-11-19）：整机跑久了 ZONE_DMA32 里连 order-10 都不一定有，
+	 * 于是 30 MB 相机缓冲分配直接失败（日志 "IOC_ALLOC: Cannot allocate memory"、
+	 * "ABORT_ALLOC_GROUP s=0 want=0x1E00000"），只能 reboot 恢复。但走 IOMMU 的
+	 * 路径 iova 固定从 0x68000000 起、PA 放哪都无所谓，所以第一轮 DMA32 失败后，
+	 * 第二轮去掉 DMA32 从普通内存重试。 */
+	for (gfp_pass = force_nodma32; gfp_pass < 2 && !b->nchunks; gfp_pass++) {
+		gfp_t gfp = GFP_KERNEL | __GFP_ZERO |
+			    (gfp_pass == 0 ? GFP_DMA32 : 0);
 
-		if (n > CAMREG_MAX_CHUNK)
-			continue;
-		for (k = 0; k < n; k++) {
-			b->pages[k] = alloc_pages(GFP_KERNEL | __GFP_ZERO | GFP_DMA32,
-						  b->chunk_order);
-			if (!b->pages[k])
+		for (b->chunk_order = 10; b->chunk_order >= 8; b->chunk_order--) {
+			size_t chunk = PAGE_SIZE << b->chunk_order;
+			int n = DIV_ROUND_UP(size, chunk);
+			int k;
+
+			if (n > CAMREG_MAX_CHUNK)
+				continue;
+			for (k = 0; k < n; k++) {
+				b->pages[k] = alloc_pages(gfp, b->chunk_order);
+				if (!b->pages[k])
+					break;
+			}
+			if (k == n) {
+				b->nchunks = n;
 				break;
+			}
+			while (--k >= 0)
+				__free_pages(b->pages[k], b->chunk_order);
+			memset(b->pages, 0, sizeof(b->pages));
 		}
-		if (k == n) {
-			b->nchunks = n;
-			break;
-		}
-		while (--k >= 0)
-			__free_pages(b->pages[k], b->chunk_order);
-		memset(b->pages, 0, sizeof(b->pages));
 	}
 	if (!b->nchunks)
 		return -ENOMEM;
 	b->size = (size_t)b->nchunks * (PAGE_SIZE << b->chunk_order);
+	if (gfp_pass > 0)
+		pr_warn("camreg: ZONE_DMA32 碎片化，改用普通内存分配 %zu B（依赖 IOMMU 映射）\n",
+			b->size);
 	b->paddr = page_to_phys(b->pages[0]);
 
 	/* 关键：alloc_pages(__GFP_ZERO) 是在**内核线性映射（cached）**里把页清零的，

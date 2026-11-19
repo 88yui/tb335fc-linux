@@ -45,3 +45,14 @@
 24. **传 .ko / 二进制前后比 md5**。
 25. 单条命令有超时上限（约 120 s），长任务放后台或分段。
 26. 没有 USB 主机时 init_boot 会卡住（已修复，见 docs/07）；救援依赖 fastboot + 好镜像，请先准备好。
+
+## F. 2026-11-19 新踩到的坑
+
+27. **整机跑久了 30 MB 相机缓冲分配失败**（`IOC_ALLOC: Cannot allocate memory`、
+    `ABORT_ALLOC_GROUP s=0 want=0x1E00000`），只能 reboot 恢复 —— 根因是 ZONE_DMA32 碎片化后
+    buddy 连 order-10 都拿不到。已修：`camreg_isp.c` 先试 GFP_DMA32，失败后从普通内存重试
+    （iova 由 IOMMU 固定映射到 0x68000000 起，与 PA 无关）。实测 `insmod … force_nodma32=1`
+    时 PA 落在 0x168800000（>4 GB）仍满帧 9,987,840 B、drops=0。
+28. **这台机器上 fstab 挂不出来**：systemd 收不到 udev 设备事件 ⇒ device 单元永远 inactive，
+    `*.mount` 被 "Condition check …skipped" 跳过。见 docs/07 第 9.1 节，改用 oneshot 服务
+    `tb335-data-mount.service` 按 LABEL 挂载。

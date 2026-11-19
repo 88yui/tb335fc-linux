@@ -19,7 +19,7 @@
 
 | 仓库源码 | 构建副本 | 产出的 .ko（release/modules/） | MD5 |
 | --- | --- | --- | --- |
-| kernel/camreg/camreg_isp.c | /home/qiji_/camreg_isp/camreg_isp.c（+ 临时/camreg） | camreg_isp_top.ko | 817d89245b74cc792000616c9292b717 |
+| kernel/camreg/camreg_isp.c | /home/qiji_/camreg_isp/camreg_isp.c（+ 临时/camreg） | camreg_isp_top.ko | 663b1306edd2ddc286410c525121f377（旧版备份 /root/camreg_isp_top.ko.bak-20261119 = 817d8924…） |
 | kernel/camv4l2/camv4l2.c | /home/qiji_/kmod_camv4l/camv4l2.c | camv4l2.ko | 36037b0052ee1c8af2a79cae184b6b70 |
 | kernel/afreg/afreg.c | /home/qiji_/afreg/afreg.c | afreg.ko | 6feb00d6caee3a61bfde3f9c7bb098dc |
 | kernel/regwin/regwin.c | /home/qiji_/regwin/regwin.c | regwin.ko | f1e474e832793167e3691678e98ec8fd（仅取证用，设备未装） |
@@ -78,7 +78,7 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
 * 行尾统一：设备上有 8 个文件原本是 CRLF（kb-move.py、bt-bridge.py、logd-shim.py、wifi-gui.py、kmsg-persist.py、
   hide-dp/wait-gpu/wifi-dhcp 三个 .service），仓库里统一存成 LF 并把 LF 版本写回设备，所以上面 82/82 的 md5 是
   「仓库文件 == 设备当前文件」的实测值；仓库另加 .gitattributes（* text=auto eol=lf）防止 Windows 检出把脚本变成 CRLF。
-* kernel/camreg/camreg_isp.c 与原稿的唯一差别是首行加的 SPDX 头（去掉该行后 md5 完全一致）。
+* kernel/camreg/camreg_isp.c 相对原稿：加 SPDX 头 + 2026-11-19 的「ZONE_DMA32 碎片化回落普通内存」补丁（含测试参数 force_nodma32）。
 
 ## 6. 已知分支差异
 
