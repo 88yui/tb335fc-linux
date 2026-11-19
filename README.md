@@ -133,8 +133,7 @@
 | 文件 | 大小 | MD5 | 用途 |
 | --- | --- | --- | --- |
 | release/init_boot_v4.img | 8 MiB | bc8e7e9995caedd3040d3c8e96f0896f | 冷启动卡 logo 修复（LZ4 legacy initramfs） |
-| release/deb_init_boot_v4.img | 8 MiB | 同左 | 同上（Debian 侧备份副本） |
-| release/modules/camreg_isp_top.ko | 36 KB | 817d89245b74cc792000616c9292b717 | 寄存器/IOVA 模块（设备在用） |
+| release/modules/camreg_isp_top.ko | 36 KB | 663b1306edd2ddc286410c525121f377 | 寄存器/IOVA 模块（设备在用，ZONE_DMA32 碎片化回落版） |
 | release/modules/camv4l2.ko | 40 KB | 36037b0052ee1c8af2a79cae184b6b70 | V4L2 代理模块（设备在用） |
 | release/modules/afreg.ko | 23 KB | 6feb00d6caee3a61bfde3f9c7bb098dc | VCM 对焦 i2c 模块（设备在用） |
 
@@ -191,7 +190,7 @@
 
 * 用户态源码 7/7 与设备 /root 完全一致：camvid.c / camrec5.c / camrec6.c / camisp.c / isp_lib.c / isp_lib.h / camdaemon.sh；
 * 内核模块源码 == WSL 构建副本，且 `release/modules/` 里的三个 .ko 与设备上正在跑的 **MD5 完全相同**
-  （camreg_isp_top.ko 817d8924… / camv4l2.ko 36037b00… / afreg.ko 6feb00d6…，vermagic 均为 5.15.185-android13-8-g365af54093bd）；
+  （camreg_isp_top.ko 663b1306… / camv4l2.ko 36037b00… / afreg.ko 6feb00d6…，vermagic 均为 5.15.185-android13-8-g365af54093bd）；
 * release/init_boot_v4.img 与设备 init_boot 分区内容一致（md5 bc8e7e99…）；
 * 设备侧确认在跑：camreg_isp / camv4l2 / afreg 已加载，/dev/camreg、/dev/camfeed、/dev/video3 齐全，camdaemon 等服务 active。
 * 板级系统补丁 83/83 与设备 md5 完全相同：boot/{sbin,bin,persist,systemd} 共 83 个脚本/unit（对照 /usr/local/sbin、/usr/local/bin、/persist、/etc/systemd/system），清单在 boot/MD5SUMS；

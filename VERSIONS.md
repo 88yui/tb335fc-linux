@@ -50,7 +50,6 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
 | 文件 | 大小 | MD5 |
 | --- | --- | --- |
 | release/init_boot_v4.img | 8,388,608 | bc8e7e9995caedd3040d3c8e96f0896f |
-| release/deb_init_boot_v4.img | 8,388,608 | bc8e7e9995caedd3040d3c8e96f0896f |
 | （原厂 init_boot 备份，本仓库不含） | 8,388,608 | 9ef20ef76dc8deb877247e6a2bf6dd83 |
 
 ## 5. 板级系统补丁：仓库 boot/ == 设备（83/83 完全一致）

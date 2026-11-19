@@ -37,7 +37,7 @@ initramfs 的 /init 里日志函数 O() 用 `echo ... > /dev/ttyGS0`。没有 US
 * switch_root 的 stdio 改成 /dev/null；
 * 兜底日志改 /dev/console。
 
-产物：release/init_boot_v4.img / deb_init_boot_v4.img（各 8,388,608 B，md5 bc8e7e9995caedd3040d3c8e96f0896f）。
+产物：release/init_boot_v4.img（8,388,608 B，md5 bc8e7e9995caedd3040d3c8e96f0896f；Debian 侧备份副本 deb_init_boot_v4.img 内容相同，已去重）。
 
 ### 2.3 刷写与恢复
 
