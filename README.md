@@ -60,7 +60,7 @@
     kernel/regwin/      通用物理窗口只读取证模块（/proc/regwin，排障用）
     userspace/          camrec5/6（采集）、camvid/camfront（实时链路）、camisp（离线转图）、isp_lib/isp_front（ISP 库）
     userspace/tools/    raw2png / autoisp / camfeedfmt / camfeedstat / 测试工具
-    boot/               initramfs 补丁（init_boot v4）+ 82 个板级系统补丁（20 个 systemd 单元、
+    boot/               initramfs 补丁（init_boot v4）+ 83 个板级系统补丁（21 个 systemd 单元、
                         27 个 /usr/local/sbin、20 个 /usr/local/bin、15 个 /persist 脚本，含 MD5SUMS）
     docs/               技术文档（寄存器机制、CQ 环、ISP、V4L2、前置、启动、雷区、路线图）
     release/            可直接刷入的镜像与校验和（init_boot v4）
@@ -115,7 +115,7 @@
 
 ## 5. 一次性系统补丁（boot/）
 
-这些补丁解决「装完 Debian 后不能当电脑用」的问题。**82 个文件与作者实机逐字节一致**（md5 清单见 boot/MD5SUMS）：
+这些补丁解决「装完 Debian 后不能当电脑用」的问题。**83 个文件与作者实机逐字节一致**（md5 清单见 boot/MD5SUMS）：
 
     boot/sbin/tb335-load-modules.sh        # 220 个模块按依赖顺序批量加载（开机 105 s → 29 s 的关键之一）
     boot/bin/tb335-powerkey.py             # 电源键：短按熄屏、长按 3 s 菜单、长按 8 s 强制关机
@@ -165,7 +165,7 @@
 | docs/09-roadmap.md | 已完成 / 未完成 / 建议的下一步（含已放弃路线的原因） |
 | docs/10-build-deploy.md | 编译、部署、故障对照表、排障纪律 |
 | VERSIONS.md | 源码 ↔ 设备实机二进制的 MD5 对照、分支差异 |
-| boot/README.md | 82 个板级系统补丁的逐文件说明与部署步骤 |
+| boot/README.md | 83 个板级系统补丁的逐文件说明与部署步骤 |
 
 ---
 
@@ -194,7 +194,7 @@
   （camreg_isp_top.ko 817d8924… / camv4l2.ko 36037b00… / afreg.ko 6feb00d6…，vermagic 均为 5.15.185-android13-8-g365af54093bd）；
 * release/init_boot_v4.img 与设备 init_boot 分区内容一致（md5 bc8e7e99…）；
 * 设备侧确认在跑：camreg_isp / camv4l2 / afreg 已加载，/dev/camreg、/dev/camfeed、/dev/video3 齐全，camdaemon 等服务 active。
-* 板级系统补丁 82/82 与设备 md5 完全相同：boot/{sbin,bin,persist,systemd} 共 80 个脚本/unit（对照 /usr/local/sbin、/usr/local/bin、/persist、/etc/systemd/system），清单在 boot/MD5SUMS；
+* 板级系统补丁 83/83 与设备 md5 完全相同：boot/{sbin,bin,persist,systemd} 共 83 个脚本/unit（对照 /usr/local/sbin、/usr/local/bin、/persist、/etc/systemd/system），清单在 boot/MD5SUMS；
   其中 boot/sbin/a9b-rescue-cleanup.sh 设备上的注释曾被写坏（功能相同），已把仓库里的干净版本回写设备并复验。
 
 ## 10 · 不含什么

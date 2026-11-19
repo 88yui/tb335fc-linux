@@ -53,10 +53,10 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
 | release/deb_init_boot_v4.img | 8,388,608 | bc8e7e9995caedd3040d3c8e96f0896f |
 | （原厂 init_boot 备份，本仓库不含） | 8,388,608 | 9ef20ef76dc8deb877247e6a2bf6dd83 |
 
-## 5. 板级系统补丁：仓库 boot/ == 设备（82/82 完全一致）
+## 5. 板级系统补丁：仓库 boot/ == 设备（83/83 完全一致）
 
 2026-11-19 从设备整包拉取（tar 打包 /etc/systemd/system、/usr/local/sbin、/usr/local/bin、/persist），
-按目录落到 boot/ 后逐文件 md5 比对，结果 **82 个文件全部相同**（清单 boot/MD5SUMS）：
+按目录落到 boot/ 后逐文件 md5 比对，结果 **83 个文件全部相同**（清单 boot/MD5SUMS）：
 
 | 仓库目录 | 设备路径 | 文件数 | 说明 |
 | --- | --- | --- | --- |
@@ -76,7 +76,7 @@ license=GPL。上面的 .ko 直接可用于**同版本内核**的设备。
 * 早期试验期的 tb335-rotate-guard.service / tb335-session-heal.service 对应的脚本在现网设备上已不存在，未收录；
 * userspace/cammirror 与 boot/bin/cammirror 是同一文件（32fa089a270446aedccfca047a77912e），保留两份仅为目录完整性。
 * 行尾统一：设备上有 8 个文件原本是 CRLF（kb-move.py、bt-bridge.py、logd-shim.py、wifi-gui.py、kmsg-persist.py、
-  hide-dp/wait-gpu/wifi-dhcp 三个 .service），仓库里统一存成 LF 并把 LF 版本写回设备，所以上面 82/82 的 md5 是
+  hide-dp/wait-gpu/wifi-dhcp 三个 .service），仓库里统一存成 LF 并把 LF 版本写回设备，所以上面 83/83 的 md5 是
   「仓库文件 == 设备当前文件」的实测值；仓库另加 .gitattributes（* text=auto eol=lf）防止 Windows 检出把脚本变成 CRLF。
 * kernel/camreg/camreg_isp.c 相对原稿：加 SPDX 头 + 2026-11-19 的「ZONE_DMA32 碎片化回落普通内存」补丁（含测试参数 force_nodma32）。
 

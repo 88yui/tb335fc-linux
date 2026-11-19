@@ -47,7 +47,7 @@
     insmod /root/camv4l2.ko video_nr=3
     ln -sf /dev/video3 /dev/video0
 
-板级系统补丁（systemd 服务 + /usr/local 脚本 + /persist 脚本，共 82 个文件）：
+板级系统补丁（systemd 服务 + /usr/local 脚本 + /persist 脚本，共 83 个文件）：
 
     cd boot
     cp sbin/* /usr/local/sbin/ ; cp bin/* /usr/local/bin/ ; cp persist/* /persist/

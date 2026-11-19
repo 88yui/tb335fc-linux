@@ -1,7 +1,7 @@
 # boot · 板级系统补丁（systemd 服务 / 辅助脚本 / 恢复脚本）
 
 本目录是**设备上实际在跑**的系统层补丁，来源是联想 TB335FC（MT6835 + Debian，内核 5.15.185-android13-8-g365af54093bd）
-的一台实机，2026-11-19 全量拉取并逐文件 md5 核对：**82 个文件与设备上的对应文件全部 md5 相同**
+的一台实机，2026-11-19 全量拉取并逐文件 md5 核对：**83 个文件与设备上的对应文件全部 md5 相同**
 （清单见 MD5SUMS，核对结果见 ../VERSIONS.md 第 5 节）。
 
 它们解决的问题都属于「这台机器特有」的坑：MTK 充电/关机模式、A9b initramfs 冷启动、
@@ -15,7 +15,7 @@ GPU/DRM 节点缺失、声卡与耳机插孔、屏幕键盘、亮度、WiFi/BT �
     sbin/         27 个 /usr/local/sbin/tb335-* 与 a9b-*
     bin/          20 个 /usr/local/bin/tb335-* 与 cammirror
     persist/      15 个 /persist 下的恢复/切换/WiFi/音频/输入辅助脚本
-    MD5SUMS       上面 82 个文件的 md5
+    MD5SUMS       上面 83 个文件的 md5
 
 ## 各文件作用
 
