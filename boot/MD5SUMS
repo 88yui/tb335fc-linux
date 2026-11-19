@@ -64,6 +64,7 @@ cc74d36e6a8b09905bf3ec838f86e0b0  systemd/camdaemon.service
 452335bf6864973103c70005b53bb731  systemd/tb335-audio-state.service
 dc7f6bbaea00fde5171f03893608fdfb  systemd/tb335-audio.service
 b42a2997aa522dcee9f0451ea2db9d68  systemd/tb335-bt.service
+1e3313e0db674c3dbcbc4fd5a4be2f49  systemd/tb335-data-mount.service
 c88de9ca3bbd88a72af8c1aad64b23c4  systemd/tb335-devperm.service
 e5f88e3eb2e0c8007a9dc31e9f764ee2  systemd/tb335-drm-compat.service
 e80ca3c0f33d812a02ab67f7b7a690cf  systemd/tb335-hide-dp.service

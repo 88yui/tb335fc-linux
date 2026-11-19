@@ -162,12 +162,21 @@ WMT 从未启动 ⇒ 无 WiFi 无蓝牙。修复：把 vendor/bin + firmware（8
     mkfs.ext4 -F -L linux_super   -m 1 /dev/sdc62
     mkfs.ext4 -F -L linux_userdata -m 1 /dev/sdc72
     mkdir -p /data /mnt/super
-    # /etc/fstab 追加（nofail 防止分区异常时卡启动）
-    UUID=a03ce644-899a-466b-8d24-8da6b12d0093  /data       ext4 defaults,nofail,noatime 0 2
-    UUID=a5cf3263-cfe9-4c7e-8d29-ed76809079d9  /mnt/super  ext4 defaults,nofail,noatime 0 2
     mount /data && mount /mnt/super && chown desk:desk /data /mnt/super
 
 结果：/data 46 G、/mnt/super 11 G 可用，GPT 原始表保存在 /persist/gpt_sdc_backup.txt（也随仓库 docs 记录）。
+
+**★ 坑：这台机器上 fstab 挂不出来。** 一开始把两个分区写进 /etc/fstab（UUID=… defaults,nofail,noatime），
+手动 `mount -a` 能挂，但重启后 dmesg/journal 只有
+`Condition check resulted in data.mount - /data being skipped.`（mnt-super.mount 同样），
+`systemctl start data.mount` 报 `A dependency job for data.mount failed`，对应
+`dev-disk-by\x2duuid-….device` 永远 inactive（启动它 90 s 超时，之后 umount 报 dependency/EIO）。
+根因是**本机 systemd 收不到 udev 设备事件**（/dev 是 tmpfs，靠自定义 /etc/udev/rules.d/99-tb335-mknod.rules
+调 udev-mknod.sh 建节点；`udevadm trigger --action=change` 后设备单元仍 inactive，/run/udev/queue 不存在），
+所以 fstab 生成的 *.mount 拿不到 device 单元，属本机定制 Debian 的既有缺陷，不是 mkfs 引入。
+**解法**：fstab 两行注释掉，改用 oneshot 服务 `tb335-data-mount.service`（仓库 boot/systemd/）：
+`ExecStart=/bin/sh -c 'mkdir -p /data /mnt/super; mountpoint -q /data || mount -L linux_userdata -o noatime /data; …'`，
+`RemainAfterExit=yes`、`WantedBy=multi-user.target`，`systemctl enable` 即可。2026-11-19 重启实测两分区自动挂上、owner desk:desk 775。
 
 ### 9.2 注意事项
 

@@ -1,0 +1,16 @@
+[Unit]
+Description=TB335 mount reclaimed ext4 partitions (/data 46G, /mnt/super 11G)
+Documentation=file:///etc/systemd/system/tb335-data-mount.service
+# 本机 systemd 收不到 udev 设备事件（/dev 为 tmpfs + 自定义 mknod 规则），
+# fstab 生成的 *.mount 会因 device 单元永远 inactive 而被跳过（Condition check → skipped），
+# 所以这里用 oneshot 服务直接按 LABEL 挂载。
+After=local-fs.target systemd-udevd.service
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'mkdir -p /data /mnt/super; mountpoint -q /data || mount -L linux_userdata -o noatime /data; mountpoint -q /mnt/super || mount -L linux_super -o noatime /mnt/super; chown desk:desk /data /mnt/super; chmod 775 /data /mnt/super'
+
+[Install]
+WantedBy=multi-user.target
